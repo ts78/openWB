@@ -70,19 +70,31 @@ incrementTimer(){
 }
 
 getAndWriteSoc(){
-	openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: Requesting SoC"
-	echo 0 > $soctimerfile
-	answer=$($MODULEDIR/../soc_evcc/soc $fztype --user "$username" --password "$password" --vin "$vin" --token "$token" 2>&1)
-	if [ $? -eq 0 ]; then
-		# we got a valid answer
-		# catch float
-		answer=$(echo "$answer/1" | bc)
-		echo $answer > $socfile
-		openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: SoC: $answer"
-	else
-		# we have a problem
-		openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: Error from EVCC: $answer"
-	fi
+        openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: Requesting SoC"
+        echo 0 > $soctimerfile
+        # store vehicle configuration for evcc
+cat <<EOF > $MODULEDIR/../soc_evcc/evcc.yaml
+vehicles:
+- name: $fztype
+  type: $fztype
+  user: $username
+  password: $password
+  vin: $vin
+EOF
+        # read vehicle status using evcc and above created config
+        answer=$($MODULEDIR/../soc_evcc/evcc -c $MODULEDIR/../soc_evcc/evcc.yaml vehicle 2>&1)
+        if [ $? -eq 0 ]; then
+                # we got a valid answer
+                # extract SoC as number only
+                answer=$(echo ${answer:16:4} | sed 's/%.*//')
+                echo $answer > $socfile
+                openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: SoC: $answer"
+        else
+                # we have a problem
+                openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: Error from EVCC: $answer"
+        fi
+        # remove evcc config again
+        rm $MODULEDIR/../soc_evcc/evcc.yaml
 }
 wakeupCar(){
 	openwbDebugLog ${DMOD} 0 "Lp$CHARGEPOINT: Wakeup car"
